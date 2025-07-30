@@ -4,7 +4,6 @@ const db = require('./db'); // Import the database connection
 config = require('dotenv').config();
 const userRoute = require('./routes/userRoute');
 const candidateRoute = require('./routes/candidateRoute'); 
-// const { jwtMiddleware} = require('./routes/jwt'); // Import JWT middleware 
 
 
 const bodyParser = require('body-parser');

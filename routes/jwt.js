@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 
 const jwtMiddleware = (req, res, next) => {
+        console.log('jwtMiddleware applied on route:', req.method, req.originalUrl);
     const authorizationHeader = req.headers['authorization'];
     if (!authorizationHeader) {
         return res.status(401).json({ message: 'No authorization header provided' });

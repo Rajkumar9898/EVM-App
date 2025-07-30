@@ -9,7 +9,7 @@ const { jwtMiddleware, generateToken } = require('../routes/jwt'); // Import JWT
 const checkAdminRole = async (userId) => {
     try {
         const user = await User.findById(userId); // Find user by ID
-         if (!user) {
+        if (!user) {
             console.warn('User not found for ID:', userId); // Optional: debug info
             return false;
         }
@@ -20,8 +20,40 @@ const checkAdminRole = async (userId) => {
     }
 }
 
+// Route to get vote counts
+router.get('/vote/count', async (req, res) => {
+    try {
+        const candidates = await Candidate.find().sort({voteCount: -1}); // Get all candidates with their vote counts
+        if (!candidates || candidates.length === 0) {
+            return res.status(404).json({ error: 'No candidates found' });
+        }
+        const voteRecord = candidates.map(candidate => ({
+            party: candidate.party,
+            voteCount: candidate.voteCount
+        }));
+        res.status(200).json(voteRecord); // Return the vote counts
+    } catch (error) {
+        console.error('Error in GET /vote-count:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Route to get all candidates
+router.get('/', async (req, res) => {
+    try {
+        const candidates = await Candidate.find(); // Get all candidates
+        if (!candidates || candidates.length === 0) {
+            return res.status(404).json({ error: 'No candidates found' });
+        }
+        res.status(200).json(candidates); // Return the list of candidates
+    } catch (error) {
+        console.error('Error in GET /candidates:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 // Route to add a new candidate
-router.post('/',jwtMiddleware, async (req, res) => {
+router.post('/', jwtMiddleware, async (req, res) => {
     try {
         if (!(await checkAdminRole(req.user.id))) {
             return res.status(403).json({ error: 'Forbidden: Only admins can add candidates' });
@@ -29,7 +61,7 @@ router.post('/',jwtMiddleware, async (req, res) => {
         const data = req.body;
         const newCandidate = new Candidate(data);
         const response = await newCandidate.save(); // Save the new user to the database
-        res.status(200).json({ message: 'candidate created successfully', response: response}); // Return the created person and token});
+        res.status(200).json({ message: 'candidate created successfully', response: response }); // Return the created person and token});
     } catch (error) {
         if (error.code === 11000) {
             // This is a MongoDB duplicate key error
@@ -43,7 +75,7 @@ router.post('/',jwtMiddleware, async (req, res) => {
 
 
 // Route to update candidate details
-router.put('/:candidateID',jwtMiddleware, async (req, res) => {
+router.put('/:candidateID', jwtMiddleware, async (req, res) => {
     try {
         if (!(await checkAdminRole(req.user.id))) {
             return res.status(403).json({ error: 'Forbidden: Only admins can add candidates' });
@@ -70,7 +102,7 @@ router.put('/:candidateID',jwtMiddleware, async (req, res) => {
 });
 
 // Route to delete a candidate
-router.delete('/:candidateID',jwtMiddleware, async (req, res) => {
+router.delete('/:candidateID', jwtMiddleware, async (req, res) => {
     try {
         if (!(await checkAdminRole(req.user.id))) {
             return res.status(403).json({ error: 'Forbidden: Only admins can delete candidates' });
@@ -80,7 +112,7 @@ router.delete('/:candidateID',jwtMiddleware, async (req, res) => {
         if (!mongoose.Types.ObjectId.isValid(candidateID)) {
             return res.status(404).json({ error: 'Invalid person ID' });
         }
-        const response = await Candidate.findByIdAndDelete(candidateID); 
+        const response = await Candidate.findByIdAndDelete(candidateID);
         if (!response) {
             return res.status(404).json({ error: 'Candidate not found' });
         }
@@ -90,4 +122,43 @@ router.delete('/:candidateID',jwtMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
+// Route to vote
+router.post('/vote/:candidateID', jwtMiddleware, async (req, res) => {
+    try {
+        const candidateID = req.params.candidateID; // Get candidate ID from request parameters
+        const userId = req.user.id; // Get user ID from JWT token
+        // ✅ Check if the id is a valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(candidateID)) {
+            return res.status(404).json({ error: 'Invalid candidate ID' });
+        }
+        const candidate = await Candidate.findById(candidateID); // Find candidate by ID
+        if (!candidate) {
+            return res.status(404).json({ error: 'Candidate not found' });
+        }
+        const user = await User.findById(userId); // Find user by ID
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        if (user.isVoted) {
+            return res.status(403).json({ error: 'You have already voted' });
+        }
+        if (user.role == 'admin') {
+            return res.status(403).json({ error: 'Forbidden: Only voters can votes' });
+        }
+        // Add the vote
+        candidate.votes.push({ user: userId });
+        candidate.voteCount += 1; // Increment the vote count
+        user.isVoted = true; // Mark the user as having voted
+        await candidate.save(); // Save the updated candidate
+        await user.save(); // Save the updated user
+        res.status(200).json({ message: 'Vote recorded successfully', candidate }); // Return the number of votes
+    } catch (error) {
+        console.error('Error in Post /candidate/:id/votes:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+
 module.exports = router;
